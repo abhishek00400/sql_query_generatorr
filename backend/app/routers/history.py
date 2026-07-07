@@ -19,7 +19,7 @@ async def get_history(db: Session = Depends(get_db)):
 @router.post("/", response_model=HistoryEntry)
 async def save_history(request: SaveHistoryRequest, db: Session = Depends(get_db)):
     entry = history_service.save_entry(db, request.model_dump())
-    return HistoryEntry.from_orm(entry)
+    return HistoryEntry.model_validate(entry)
 
 
 @router.delete("/{entry_id}")

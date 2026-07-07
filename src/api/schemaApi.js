@@ -16,11 +16,11 @@ export async function getSampleSchema(key) {
   return res.data
 }
 
-export async function parseSchema(sqlText) {
+export async function parseSchema(sqlText, dbConfig) {
   if (isMock) {
     await delay(700)
     return mockParsedSchema
   }
-  const res = await axiosInstance.post('/schema/parse', { sql: sqlText })
+  const res = await axiosInstance.post('/schema/parse', dbConfig ? { dbConfig } : { sql: sqlText })
   return res.data
 }

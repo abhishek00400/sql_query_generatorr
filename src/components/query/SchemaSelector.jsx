@@ -2,14 +2,13 @@ import React, { useMemo } from 'react'
 import { useSchemaStore } from '../../store/useSchemaStore'
 
 const options = [
-  { value: 'hr', label: 'HR Database' },
-  { value: 'student', label: 'Student Database' },
-  { value: 'ecommerce', label: 'E-commerce DB' },
-  { value: 'custom', label: 'Custom Schema' },
+  { value: 'hr', label: 'Sample HR' },
+  { value: 'student', label: 'Sample Student' },
+  { value: 'ecommerce', label: 'Sample E-commerce' },
 ]
 
 export default function SchemaSelector() {
-  const { selectedSchemaKey, setSchema, customSQL, parseCustomSchema } = useSchemaStore()
+  const { selectedSchemaKey, setSchema } = useSchemaStore()
 
   const selected = useMemo(() => options.find((o) => o.value === selectedSchemaKey) || options[0], [selectedSchemaKey])
 
@@ -28,23 +27,9 @@ export default function SchemaSelector() {
         ))}
       </select>
 
-      {selected.value === 'custom' && (
-        <div className="mt-3">
-          <textarea
-            value={customSQL}
-            onChange={(e) => useSchemaStore.getState().setCustomSQL?.(e.target.value)}
-            onBlur={() => {
-              if ((customSQL || '').trim()) parseCustomSchema(customSQL)
-            }}
-            placeholder="Paste CREATE TABLE SQL here"
-            rows={4}
-            className="w-full resize-none rounded-lg border border-border bg-bg-primary/10 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent transition"
-          />
-          <div className="mt-2 text-xs text-text-muted">Paste CREATE TABLE SQL; schema will be parsed.</div>
-        </div>
-      )}
-
-      {/* Detected table pills could be added after parsing; omitted for now */}
+      <div className="mt-3 rounded-lg border border-border/60 bg-bg-elevated/30 px-3 py-2 text-xs text-text-muted">
+        Queries will use the connected database schema when a valid connection is available.
+      </div>
     </div>
   )
 }

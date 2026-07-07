@@ -5,13 +5,13 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-export async function generateSQL(input, schema) {
+export async function generateSQL(input, schema, dbConfig) {
   if (isMock) {
     await delay(1200)
     return { options: mockQueryOptions }
   }
 
-  const res = await axiosInstance.post('/query/generate', { input, schema })
+  const res = await axiosInstance.post('/query/generate', { input, schema, dbConfig })
   return res.data
 }
 

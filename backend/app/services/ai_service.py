@@ -9,7 +9,7 @@ import sqlparse
 from app.config import GEMINI_API_KEY, AI_MODEL
 from app.services.schema_service import SAMPLE_SCHEMAS
 
-GEMINI_BASE_URL = "https://gemini.googleapis.com/v1"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
 def _build_system_prompt() -> str:
@@ -90,15 +90,45 @@ def _extract_json_block(text: str) -> str:
     return text
 
 
+def _build_fallback_sql(user_input: str, schema_sql: str) -> str:
+    text = (user_input or "").strip().lower()
+    table_match = re.search(r"create table\s+([\w`]+)", schema_sql, re.IGNORECASE)
+    table_name = table_match.group(1).strip('`') if table_match else "table"
+
+    if any(word in text for word in ["count", "how many", "total", "number of"]):
+        return f"SELECT COUNT(*) AS total_count FROM `{table_name}`"
+
+    if any(word in text for word in ["latest", "recent", "last"]):
+        return f"SELECT * FROM `{table_name}` ORDER BY 1 DESC LIMIT 10"
+
+    if any(word in text for word in ["top", "highest", "max", "best"]):
+        return f"SELECT * FROM `{table_name}` LIMIT 10"
+
+    return f"SELECT * FROM `{table_name}` LIMIT 50"
+
+
+def _build_fallback_options(user_input: str, schema_sql: str) -> list[dict]:
+    fallback_sql = _build_fallback_sql(user_input, schema_sql)
+    return [{
+        "sql": fallback_sql,
+        "explanation": {"bullets": ["The app used a schema-based fallback query because the AI service did not return a usable response."]},
+        "tables": [],
+        "impact": {"type": "SELECT", "estimatedRows": 50, "isDestructive": False},
+        "validation": [{"status": "warning", "label": "Fallback mode", "detail": "No live AI response available"}],
+    }]
+
+
 def _call_gemini(prompt: str) -> str:
-    url = f"{GEMINI_BASE_URL}/models/{AI_MODEL}:generateText"
+    url = f"{GEMINI_BASE_URL}/models/{AI_MODEL}:generateContent"
     params = {"key": GEMINI_API_KEY}
     body = {
-        "prompt": {"text": prompt},
-        "temperature": 0.2,
-        "maxOutputTokens": 1200,
-        "topP": 0.95,
-        "topK": 40,
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 1200,
+            "topP": 0.95,
+            "topK": 40,
+        },
     }
 
     try:
@@ -115,37 +145,42 @@ def _call_gemini(prompt: str) -> str:
     if not candidates or not isinstance(candidates, list):
         raise HTTPException(status_code=500, detail="AI response did not contain candidates")
 
-    text = candidates[0].get("content") if isinstance(candidates[0], dict) else None
-    if not text:
+    first_candidate = candidates[0]
+    if not isinstance(first_candidate, dict):
         raise HTTPException(status_code=500, detail="AI response candidate missing content")
 
-    return text
+    parts = first_candidate.get("content", {}).get("parts") or []
+    if not parts:
+        raise HTTPException(status_code=500, detail="AI response candidate missing content")
+
+    text_parts = [part.get("text", "") for part in parts if isinstance(part, dict)]
+    return "".join(text_parts)
 
 
 def generate_sql_options(user_input: str, schema_sql: str) -> list[dict]:
     if not schema_sql or not schema_sql.strip():
         raise HTTPException(status_code=400, detail="Schema SQL is required")
 
-    prompt = _build_user_prompt(user_input, schema_sql)
-    full_prompt = f"{_build_system_prompt()}\n\n{prompt}"
-    raw_text = _call_gemini(full_prompt)
-    json_text = _extract_json_block(raw_text)
-
     try:
+        prompt = _build_user_prompt(user_input, schema_sql)
+        full_prompt = f"{_build_system_prompt()}\n\n{prompt}"
+        raw_text = _call_gemini(full_prompt)
+        json_text = _extract_json_block(raw_text)
+
         payload = json.loads(json_text)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail=f"AI response parsing failed: {exc}")
+    except Exception:
+        return _build_fallback_options(user_input, schema_sql)
 
     if not isinstance(payload, dict) or "options" not in payload or not isinstance(payload["options"], list):
-        raise HTTPException(status_code=500, detail="AI response shape was invalid")
+        return _build_fallback_options(user_input, schema_sql)
 
     options = []
     for raw_option in payload["options"]:
         if not _validate_option(raw_option):
-            raise HTTPException(status_code=500, detail="AI returned invalid query option format")
+            return _build_fallback_options(user_input, schema_sql)
         options.append(_normalize_generated_option(raw_option))
 
     if not options:
-        raise HTTPException(status_code=500, detail="AI did not return any query options")
+        return _build_fallback_options(user_input, schema_sql)
 
     return options

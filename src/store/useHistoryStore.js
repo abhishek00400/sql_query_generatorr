@@ -12,12 +12,16 @@ export const useHistoryStore = create((set, get) => ({
       const raw = localStorage.getItem(HISTORY_STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        set({ entries: parsed })
-      } else {
-        const apiEntries = await getHistory()
-        set({ entries: apiEntries })
+        set({ entries: Array.isArray(parsed) ? parsed : parsed.entries || [] })
+        return
       }
-    } catch {}
+
+      const response = await getHistory()
+      const apiEntries = Array.isArray(response) ? response : response?.entries || []
+      set({ entries: apiEntries })
+    } catch {
+      set({ entries: [] })
+    }
   },
 
   addEntry: (entry) => {

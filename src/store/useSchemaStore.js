@@ -1,10 +1,9 @@
 import { create } from 'zustand'
 import { getSampleSchema, parseSchema } from '../api/schemaApi'
-import { mockParsedSchema } from '../mock/mockSchema'
 
 export const useSchemaStore = create((set, get) => ({
   selectedSchemaKey: 'hr',
-  parsedSchema: mockParsedSchema,
+  parsedSchema: null,
   customSQL: '',
   isLoading: false,
 
@@ -31,6 +30,16 @@ export const useSchemaStore = create((set, get) => ({
       set({ customSQL: sqlText, parsedSchema: res, isLoading: false, selectedSchemaKey: 'custom' })
     } catch {
       set({ isLoading: false })
+    }
+  },
+
+  loadDbSchema: async (dbConfig) => {
+    set({ isLoading: true })
+    try {
+      const res = await parseSchema('', dbConfig)
+      set({ parsedSchema: res, selectedSchemaKey: 'hr', isLoading: false })
+    } catch {
+      set({ isLoading: false, parsedSchema: null })
     }
   },
 

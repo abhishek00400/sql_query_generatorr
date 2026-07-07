@@ -9,9 +9,13 @@ export default function HistoryPage() {
     loadFromStorage()
   }, [])
 
-  const filtered = entries.filter((e) => {
+  const safeEntries = Array.isArray(entries) ? entries : []
+
+  const filtered = safeEntries.filter((e) => {
     const q = (filters.search || '').toLowerCase()
-    const matchSearch = !q || (e.input || '').toLowerCase().includes(q) || (e.sql || '').toLowerCase().includes(q)
+    const inputText = (e.input || e.user_input || '').toString()
+    const sqlText = (e.sql || '').toString()
+    const matchSearch = !q || inputText.toLowerCase().includes(q) || sqlText.toLowerCase().includes(q)
     return matchSearch
   })
 
@@ -29,10 +33,10 @@ export default function HistoryPage() {
             <div key={e.id} className="rounded-xl border border-border bg-bg-surface/30 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-text-primary">{e.input}</div>
+                  <div className="text-sm font-semibold text-text-primary">{e.input || e.user_input || 'Untitled query'}</div>
                   <div className="mt-2 text-xs text-text-muted">SQL: {String(e.sql || '').split('\n')[0]}</div>
                 </div>
-                <div className="text-xs text-text-secondary">{new Date(e.createdAt).toLocaleString()}</div>
+                <div className="text-xs text-text-secondary">{new Date(e.createdAt || e.created_at || Date.now()).toLocaleString()}</div>
               </div>
             </div>
           ))}

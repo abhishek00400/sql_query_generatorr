@@ -28,7 +28,7 @@ export default function ExecutePanel() {
     <section className="mt-6 rounded-xl border border-border bg-bg-surface/40 p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-text-primary">Execute</div>
-        <div className="text-xs text-text-muted">Mock execution</div>
+        <div className="text-xs text-text-muted">Live database execution</div>
       </div>
 
       <div className="mt-4">

@@ -14,6 +14,7 @@ export default function SettingsPage() {
     setApiKey,
     setModel,
     connectionStatus,
+    connectionError,
     testConnection,
     saveSettings,
     resetSettings,
@@ -82,7 +83,12 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          <div className="mt-3 text-xs font-semibold text-text-secondary">Status: {connectionStatus}</div>
+          <div className="mt-3 space-y-1">
+            <div className="text-xs font-semibold text-text-secondary">Status: {connectionStatus}</div>
+            {connectionError ? (
+              <div className="text-xs text-danger">{connectionError}</div>
+            ) : null}
+          </div>
         </section>
 
         <section className="rounded-xl border border-border bg-bg-surface/30 p-5">

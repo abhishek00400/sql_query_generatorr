@@ -18,12 +18,13 @@ export const useQueryStore = create((set, get) => ({
   generateSQL: async () => {
     const input = get().userInput
     const schemaState = useSchemaStore.getState()
-    const selectedSchema = schemaState.selectedSchemaKey
-    const schema = selectedSchema === 'custom' ? schemaState.customSQL || selectedSchema : selectedSchema
+    const selectedSchema = schemaState.selectedSchemaKey || 'hr'
+    const { dbConfig } = useSettingsStore.getState()
+    const schema = selectedSchema || 'hr'
 
     set({ isLoading: true, error: null })
     try {
-      const res = await generateSQL(input, schema)
+      const res = await generateSQL(input, schema, dbConfig)
       set({
         generatedOptions: res?.options || [],
         selectedOption: null,

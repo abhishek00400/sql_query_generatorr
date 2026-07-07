@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class HistoryEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_input: str
     sql: str
@@ -12,9 +14,6 @@ class HistoryEntry(BaseModel):
     schema_used: str
     estimated_rows: int
     created_at: datetime
-
-    class Config:
-        orm_mode = True
 
 
 class SaveHistoryRequest(BaseModel):

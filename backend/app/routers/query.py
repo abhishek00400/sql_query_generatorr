@@ -16,14 +16,22 @@ async def generate_sql(request: GenerateRequest, db: Session = Depends(get_db)):
     if not request.input or not request.input.strip():
         raise HTTPException(status_code=400, detail="Input is required")
 
-    if request.schema in SAMPLE_SCHEMAS:
+    schema_sql = None
+    if request.dbConfig:
+        try:
+            tables = schema_service.get_schema_from_db(request.dbConfig.model_dump())
+            schema_sql = schema_service.schema_to_sql_string(tables)
+        except Exception:
+            schema_sql = None
+
+    if not schema_sql and request.schema in SAMPLE_SCHEMAS:
         schema_sql = SAMPLE_SCHEMAS[request.schema]
-    elif isinstance(request.schema, str) and request.schema.strip().upper().startswith("CREATE"):
+    elif not schema_sql and isinstance(request.schema, str) and request.schema.strip().upper().startswith("CREATE"):
         schema_sql = request.schema
-    elif request.schema == "custom" and request.dbConfig:
+    elif not schema_sql and request.schema == "custom" and request.dbConfig:
         tables = schema_service.get_schema_from_db(request.dbConfig.model_dump())
         schema_sql = schema_service.schema_to_sql_string(tables)
-    else:
+    elif not schema_sql:
         raise HTTPException(status_code=400, detail="Unsupported schema selection")
 
     options = ai_service.generate_sql_options(request.input, schema_sql)

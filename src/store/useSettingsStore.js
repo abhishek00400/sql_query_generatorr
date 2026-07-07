@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { SETTINGS_STORAGE_KEY, THEME_STORAGE_KEY } from '../constants/config'
 import { testConnection as apiTestConnection } from '../api/settingsApi'
+import { useSchemaStore } from './useSchemaStore'
 
 function loadSettings() {
   try {
@@ -19,6 +20,7 @@ const defaults = {
   apiKey: '',
   model: 'gemini-1.5-pro',
   connectionStatus: 'idle',
+  connectionError: '',
 }
 
 export const useSettingsStore = create((set, get) => {
@@ -47,7 +49,7 @@ export const useSettingsStore = create((set, get) => {
     setModel: (model) => set((s) => ({ model })),
 
     testConnection: async () => {
-      set({ connectionStatus: 'testing' })
+      set({ connectionStatus: 'testing', connectionError: '' })
       const settings = get()
       const payload = {
         host: settings.dbConfig.host,
@@ -60,10 +62,16 @@ export const useSettingsStore = create((set, get) => {
 
       try {
         const result = await apiTestConnection(payload)
-        set({ connectionStatus: result.success ? 'connected' : 'failed' })
+        set({
+          connectionStatus: result.success ? 'connected' : 'failed',
+          connectionError: result.success ? '' : result.message || 'Connection failed',
+        })
+        if (result.success) {
+          await useSchemaStore.getState().loadDbSchema(payload)
+        }
         return result
       } catch (e) {
-        set({ connectionStatus: 'failed' })
+        set({ connectionStatus: 'failed', connectionError: e?.message || 'Connection failed' })
         return { success: false, message: e?.message || 'Connection failed' }
       }
     },
