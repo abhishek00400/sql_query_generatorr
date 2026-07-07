@@ -1,57 +1,53 @@
 import { create } from 'zustand'
 import { HISTORY_STORAGE_KEY } from '../constants/config'
+import { getHistory, deleteEntry } from '../api/historyApi'
 
-function loadHistory() {
-  try {
-    const raw = localStorage.getItem(HISTORY_STORAGE_KEY)
-    if (!raw) return []
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
-}
+export const useHistoryStore = create((set, get) => ({
+  entries: [],
+  filters: { search: '', type: 'all', dateRange: 'all' },
+  filteredEntries: [],
 
-export const useHistoryStore = create((set) => {
-  const entries = loadHistory()
-  return {
-    entries,
-    filters: { search: '', type: 'all', dateRange: 'all' },
+  loadFromStorage: async () => {
+    try {
+      const raw = localStorage.getItem(HISTORY_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        set({ entries: parsed })
+      } else {
+        const apiEntries = await getHistory()
+        set({ entries: apiEntries })
+      }
+    } catch {}
+  },
 
-    filteredEntries: entries,
+  addEntry: (entry) => {
+    set((s) => {
+      const next = [{ id: String(Date.now()), ...entry, createdAt: new Date().toISOString() }, ...s.entries]
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next))
+      } catch {}
+      return { entries: next }
+    })
+  },
 
-    addEntry: (entry) =>
-      set((s) => {
-        const nextEntries = [entry, ...s.entries]
-        try {
-          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(nextEntries))
-        } catch {}
-        return { entries: nextEntries }
-      }),
+  setFilters: (filters) => set({ filters: { ...get().filters, ...filters } }),
 
-    deleteEntry: (id) =>
-      set((s) => {
-        const nextEntries = s.entries.filter((e) => e.id !== id)
-        try {
-          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(nextEntries))
-        } catch {}
-        return { entries: nextEntries }
-      }),
+  deleteEntry: async (id) => {
+    await deleteEntry(id)
+    set((s) => {
+      const next = s.entries.filter((e) => String(e.id) !== String(id))
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next))
+      } catch {}
+      return { entries: next }
+    })
+  },
 
-    clearAll: () =>
-      set(() => {
-        try {
-          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([]))
-        } catch {}
-        return { entries: [], filteredEntries: [] }
-      }),
-
-    setFilters: (filters) => set({ filters }),
-
-    loadFromStorage: () =>
-      set(() => {
-        const entries2 = loadHistory()
-        return { entries: entries2, filteredEntries: entries2 }
-      }),
-  }
-})
+  clearAll: () => {
+    set({ entries: [] })
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY)
+    } catch {}
+  },
+}))
 

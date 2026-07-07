@@ -6,6 +6,7 @@ import App from './App'
 import './styles/index.css'
 import { THEME_STORAGE_KEY } from './constants/config'
 
+
 function applySavedTheme() {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY)

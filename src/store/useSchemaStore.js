@@ -1,23 +1,41 @@
 import { create } from 'zustand'
+import { getSampleSchema, parseSchema } from '../api/schemaApi'
+import { mockParsedSchema } from '../mock/mockSchema'
 
-export const useSchemaStore = create((set) => ({
+export const useSchemaStore = create((set, get) => ({
   selectedSchemaKey: 'hr',
-  parsedSchema: null,
+  parsedSchema: mockParsedSchema,
   customSQL: '',
   isLoading: false,
 
-  setSchema: (selectedSchemaKey) => set({ selectedSchemaKey }),
+  setSchema: async (key) => {
+    set({ selectedSchemaKey: key, isLoading: true })
+    if (key === 'custom') {
+      set({ isLoading: false })
+      return
+    }
+    try {
+      const res = await getSampleSchema(key)
+      set({ selectedSchemaKey: key, parsedSchema: res.parsed, isLoading: false })
+    } catch {
+      set({ isLoading: false, parsedSchema: null })
+    }
+  },
 
-  parseCustomSchema: async (sql) => {
+  setCustomSQL: (sql) => set({ customSQL: sql }),
+
+  parseCustomSchema: async (sqlText) => {
     set({ isLoading: true })
-    await new Promise((r) => setTimeout(r, 600))
-    set({ parsedSchema: { tables: [] }, customSQL: sql, isLoading: false })
+    try {
+      const res = await parseSchema(sqlText)
+      set({ customSQL: sqlText, parsedSchema: res, isLoading: false, selectedSchemaKey: 'custom' })
+    } catch {
+      set({ isLoading: false })
+    }
   },
 
   loadSampleSchema: async (key) => {
-    set({ isLoading: true })
-    await new Promise((r) => setTimeout(r, 500))
-    set({ parsedSchema: { tables: [] }, selectedSchemaKey: key, isLoading: false })
+    await get().setSchema(key)
   },
 }))
 

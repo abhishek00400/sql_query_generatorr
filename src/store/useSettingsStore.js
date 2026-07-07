@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { SETTINGS_STORAGE_KEY, THEME_STORAGE_KEY } from '../constants/config'
+import { testConnection as apiTestConnection } from '../api/settingsApi'
 
 function loadSettings() {
   try {
@@ -16,11 +17,11 @@ const defaults = {
   dbType: 'mysql',
   dbConfig: { host: '', port: '', dbName: '', username: '', password: '' },
   apiKey: '',
-  model: 'claude-sonnet-4-6',
+  model: 'gemini-1.5-pro',
   connectionStatus: 'idle',
 }
 
-export const useSettingsStore = create((set) => {
+export const useSettingsStore = create((set, get) => {
   const stored = loadSettings()
   const theme = stored?.theme || (localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark')
 
@@ -41,14 +42,30 @@ export const useSettingsStore = create((set) => {
       }),
 
     setDbConfig: (dbConfig) => set((s) => ({ dbConfig })),
+    setDbType: (dbType) => set({ dbType }),
     setApiKey: (apiKey) => set((s) => ({ apiKey })),
     setModel: (model) => set((s) => ({ model })),
 
     testConnection: async () => {
       set({ connectionStatus: 'testing' })
-      await new Promise((r) => setTimeout(r, 700))
-      set({ connectionStatus: 'connected' })
-      return { success: true, message: 'Connected (mock)' }
+      const settings = get()
+      const payload = {
+        host: settings.dbConfig.host,
+        port: settings.dbConfig.port,
+        dbName: settings.dbConfig.dbName,
+        username: settings.dbConfig.username,
+        password: settings.dbConfig.password,
+        type: settings.dbType === 'postgres' ? 'postgresql' : 'mysql',
+      }
+
+      try {
+        const result = await apiTestConnection(payload)
+        set({ connectionStatus: result.success ? 'connected' : 'failed' })
+        return result
+      } catch (e) {
+        set({ connectionStatus: 'failed' })
+        return { success: false, message: e?.message || 'Connection failed' }
+      }
     },
 
     saveSettings: () => {
