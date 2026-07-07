@@ -8,3 +8,11 @@ export async function testConnection(dbConfig) {
   const res = await axiosInstance.post('/db/test', dbConfig)
   return res.data
 }
+
+export async function getAiStatus() {
+  if (isMock) {
+    return { configured: true, model: 'mock-ai', message: 'AI ready (mock)' }
+  }
+  const res = await axiosInstance.get('/db/ai/status')
+  return res.data
+}

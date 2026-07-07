@@ -39,16 +39,20 @@ async def generate_sql(request: GenerateRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="AI did not return any query options")
 
     first_option = options[0]
-    history_service.save_entry(
-        db,
-        {
-            "user_input": request.input,
-            "sql": first_option["sql"],
-            "query_type": first_option["impact"]["type"],
-            "schema_used": request.schema,
-            "estimated_rows": first_option["impact"]["estimatedRows"],
-        },
-    )
+    schema_used = "custom" if request.schema.strip().upper().startswith("CREATE") else request.schema[:50]
+    try:
+        history_service.save_entry(
+            db,
+            {
+                "user_input": request.input,
+                "sql": first_option["sql"],
+                "query_type": first_option["impact"]["type"],
+                "schema_used": schema_used,
+                "estimated_rows": first_option["impact"]["estimatedRows"],
+            },
+        )
+    except Exception:
+        pass
 
     return GenerateResponse(options=options)
 

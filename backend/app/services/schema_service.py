@@ -87,26 +87,65 @@ SAMPLE_SCHEMAS = {
 }
 
 
+def _split_sql_definitions(block: str) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quote = ""
+
+    for char in block:
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"', "`"}:
+            quote = char
+            current.append(char)
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth > 0:
+            depth -= 1
+        if char == "," and depth == 0:
+            value = "".join(current).strip()
+            if value:
+                parts.append(value)
+            current = []
+            continue
+        current.append(char)
+
+    value = "".join(current).strip()
+    if value:
+        parts.append(value)
+    return parts
+
+
+def _clean_identifier(identifier: str) -> str:
+    return identifier.strip().strip("`").split(".")[-1].strip("`")
+
+
 def parse_raw_schema(sql_text: str) -> list[dict]:
     tables: list[dict] = []
-    pattern = r"CREATE TABLE\s+([\w`]+)\s*\(([^;]+?)\);"
+    pattern = r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?((?:`?\w+`?\.)?`?\w+`?)\s*\((.*?)\)\s*(?:ENGINE|DEFAULT|CHARSET|COLLATE|COMMENT|;)"
     matches = re.finditer(pattern, sql_text, re.IGNORECASE | re.DOTALL)
 
     for match in matches:
-        raw_name = match.group(1).strip('`')
+        raw_name = _clean_identifier(match.group(1))
         columns_block = match.group(2)
-        column_lines = [line.strip() for line in columns_block.splitlines() if line.strip()]
+        column_lines = _split_sql_definitions(columns_block)
         columns: list[dict] = []
 
         for line in column_lines:
-            if line.upper().startswith("PRIMARY KEY") or line.upper().startswith("FOREIGN KEY"):
+            normalized = line.strip().upper()
+            if normalized.startswith(("PRIMARY KEY", "FOREIGN KEY", "UNIQUE KEY", "KEY ", "INDEX ", "CONSTRAINT ")):
                 continue
 
             parts = re.split(r"\s+", line, maxsplit=2)
             if len(parts) < 2:
                 continue
 
-            name = parts[0].strip('`')
+            name = _clean_identifier(parts[0])
             type_text = parts[1].upper()
             constraints: list[str] = []
             if len(parts) > 2:

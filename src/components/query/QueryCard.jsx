@@ -8,7 +8,7 @@ import ImpactBadge from './ImpactBadge'
 import ValidationRow from './ValidationRow'
 
 export default function QueryCard({ option }) {
-  const { selectOption } = useQueryStore()
+  const { selectOption, generateSQL, isLoading } = useQueryStore()
 
   const impact = option?.impact
   const validation = option?.validation || []

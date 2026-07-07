@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { SETTINGS_STORAGE_KEY, THEME_STORAGE_KEY } from '../constants/config'
-import { testConnection as apiTestConnection } from '../api/settingsApi'
+import { getAiStatus, testConnection as apiTestConnection } from '../api/settingsApi'
 import { useSchemaStore } from './useSchemaStore'
 
 function loadSettings() {
@@ -19,6 +19,8 @@ const defaults = {
   dbConfig: { host: '', port: '', dbName: '', username: '', password: '' },
   apiKey: '',
   model: 'gemini-1.5-pro',
+  aiStatus: 'unknown',
+  aiMessage: '',
   connectionStatus: 'idle',
   connectionError: '',
 }
@@ -48,6 +50,21 @@ export const useSettingsStore = create((set, get) => {
     setApiKey: (apiKey) => set((s) => ({ apiKey })),
     setModel: (model) => set((s) => ({ model })),
 
+    loadAiStatus: async () => {
+      try {
+        const result = await getAiStatus()
+        set({
+          model: result.model || get().model,
+          aiStatus: result.configured ? 'configured' : 'missing',
+          aiMessage: result.message || '',
+        })
+        return result
+      } catch (e) {
+        set({ aiStatus: 'error', aiMessage: e?.message || 'Unable to read AI status' })
+        return { configured: false, message: e?.message || 'Unable to read AI status' }
+      }
+    },
+
     testConnection: async () => {
       set({ connectionStatus: 'testing', connectionError: '' })
       const settings = get()
@@ -58,6 +75,12 @@ export const useSettingsStore = create((set, get) => {
         username: settings.dbConfig.username,
         password: settings.dbConfig.password,
         type: settings.dbType === 'postgres' ? 'postgresql' : 'mysql',
+      }
+
+      if (!payload.host || !payload.port || !payload.dbName || !payload.username) {
+        const message = 'Enter host, port, database name, and username first'
+        set({ connectionStatus: 'failed', connectionError: message })
+        return { success: false, message }
       }
 
       try {
@@ -79,7 +102,8 @@ export const useSettingsStore = create((set, get) => {
     saveSettings: () => {
       set((s) => {
         try {
-          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(s))
+          const { connectionStatus, connectionError, aiStatus, aiMessage, ...persisted } = s
+          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(persisted))
         } catch {}
         return s
       })

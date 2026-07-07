@@ -5,6 +5,7 @@ export const useSchemaStore = create((set, get) => ({
   selectedSchemaKey: 'hr',
   parsedSchema: null,
   customSQL: '',
+  dbConfig: null,
   isLoading: false,
 
   setSchema: async (key) => {
@@ -27,9 +28,11 @@ export const useSchemaStore = create((set, get) => ({
     set({ isLoading: true })
     try {
       const res = await parseSchema(sqlText)
-      set({ customSQL: sqlText, parsedSchema: res, isLoading: false, selectedSchemaKey: 'custom' })
-    } catch {
+      set({ customSQL: sqlText, parsedSchema: res, isLoading: false, selectedSchemaKey: 'custom', dbConfig: null })
+      return res
+    } catch (e) {
       set({ isLoading: false })
+      throw e
     }
   },
 
@@ -37,9 +40,11 @@ export const useSchemaStore = create((set, get) => ({
     set({ isLoading: true })
     try {
       const res = await parseSchema('', dbConfig)
-      set({ parsedSchema: res, selectedSchemaKey: 'hr', isLoading: false })
-    } catch {
+      set({ parsedSchema: res, selectedSchemaKey: 'database', dbConfig, isLoading: false })
+      return res
+    } catch (e) {
       set({ isLoading: false, parsedSchema: null })
+      throw e
     }
   },
 

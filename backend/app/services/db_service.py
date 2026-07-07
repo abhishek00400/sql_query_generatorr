@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import re
+from datetime import date, datetime, time
+from decimal import Decimal
 from fastapi import HTTPException
 
 import pymysql
@@ -9,6 +10,26 @@ from psycopg2.extras import RealDictCursor
 
 
 SUPPORTED_TYPES = {"mysql", "postgresql"}
+
+
+def _json_safe(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _normalize_rows(rows):
+    normalized = []
+    for row in rows:
+        if isinstance(row, dict):
+            normalized.append({key: _json_safe(value) for key, value in row.items()})
+        else:
+            normalized.append(row)
+    return normalized
 
 
 def get_connection(db_config: dict):
@@ -60,24 +81,32 @@ def test_connection(db_config: dict) -> dict:
 
 def execute_query(sql: str, db_config: dict) -> dict:
     conn = get_connection(db_config)
+    cursor = None
     try:
         cursor = conn.cursor()
         normalized = sql.strip().upper()
-        if normalized.startswith("SELECT"):
-            cursor.execute(sql)
+        returns_rows = normalized.startswith("SELECT") or normalized.startswith("WITH") or normalized.startswith("SHOW") or normalized.startswith("DESCRIBE") or normalized.startswith("EXPLAIN")
+        cursor.execute(sql)
+
+        if returns_rows or cursor.description:
             rows = cursor.fetchall()
             columns = [col[0] for col in cursor.description] if cursor.description else []
-            return {"columns": columns, "rows": rows, "rowCount": len(rows)}
+            safe_rows = _normalize_rows(rows)
+            return {"columns": columns, "rows": safe_rows, "rowCount": len(safe_rows)}
 
-        cursor.execute(sql)
         conn.commit()
         rowcount = cursor.rowcount
         return {"columns": [], "rows": [], "rowCount": rowcount}
     except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=str(exc))
     finally:
         try:
-            cursor.close()
+            if cursor:
+                cursor.close()
         except Exception:
             pass
         try:

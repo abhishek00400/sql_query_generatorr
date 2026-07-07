@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import QueryCard from './QueryCard'
 
 export default function QueryTabs({ options = [] }) {
-  const labels = useMemo(() => ['Option A', 'Option B', 'Option C'], [])
+  const labels = useMemo(() => ['Recommended', 'Alternative', 'Analysis'], [])
   const [activeIdx, setActiveIdx] = useState(0)
 
   const active = options[activeIdx] || options[0]

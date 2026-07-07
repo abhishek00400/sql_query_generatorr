@@ -13,14 +13,22 @@ export const useQueryStore = create((set, get) => ({
   queryResults: null,
   error: null,
 
-  setUserInput: (userInput) => set({ userInput }),
+  setUserInput: (userInput) => set({ userInput, step: 1, generatedOptions: [], selectedOption: null, queryResults: null, error: null }),
 
   generateSQL: async () => {
     const input = get().userInput
     const schemaState = useSchemaStore.getState()
     const selectedSchema = schemaState.selectedSchemaKey || 'hr'
-    const { dbConfig } = useSettingsStore.getState()
-    const schema = selectedSchema || 'hr'
+    const settings = useSettingsStore.getState()
+    const dbConfig = schemaState.dbConfig || (settings.connectionStatus === 'connected' ? {
+      host: settings.dbConfig.host,
+      port: settings.dbConfig.port,
+      dbName: settings.dbConfig.dbName,
+      username: settings.dbConfig.username,
+      password: settings.dbConfig.password,
+      type: settings.dbType === 'postgres' ? 'postgresql' : 'mysql',
+    } : null)
+    const schema = selectedSchema === 'custom' ? schemaState.customSQL : selectedSchema
 
     set({ isLoading: true, error: null })
     try {
@@ -42,7 +50,21 @@ export const useQueryStore = create((set, get) => ({
   executeQuery: async (sqlOverride) => {
     const { selectedOption } = get()
     const sql = sqlOverride || selectedOption?.sql || ''
-    const { dbConfig } = useSettingsStore.getState()
+    const schemaState = useSchemaStore.getState()
+    const settings = useSettingsStore.getState()
+    const dbConfig = schemaState.dbConfig || (settings.connectionStatus === 'connected' ? {
+      host: settings.dbConfig.host,
+      port: settings.dbConfig.port,
+      dbName: settings.dbConfig.dbName,
+      username: settings.dbConfig.username,
+      password: settings.dbConfig.password,
+      type: settings.dbType === 'postgres' ? 'postgresql' : 'mysql',
+    } : null)
+
+    if (!dbConfig) {
+      set({ error: 'Connect a live database in Settings before running SQL', isLoading: false })
+      return
+    }
 
     set({ isLoading: true, error: null })
     try {

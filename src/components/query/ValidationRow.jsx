@@ -6,7 +6,8 @@ function StatusPill({ status, label, onClick }) {
     warn: { cls: 'bg-warning/15 text-warning border-warning/30', icon: '⚠' },
     fail: { cls: 'bg-danger/15 text-danger border-danger/30', icon: '❌' },
   }
-  const m = map[status] || map.pass
+  const normalized = status === 'success' ? 'pass' : status === 'warning' ? 'warn' : status === 'danger' ? 'fail' : status
+  const m = map[normalized] || map.pass
 
   return (
     <button
@@ -31,7 +32,7 @@ export default function ValidationRow({ validation = [] }) {
             key={idx}
             status={v.status}
             label={v.label}
-            onClick={v.status !== 'pass' ? () => setExpandedIdx((cur) => (cur === idx ? null : idx)) : undefined}
+            onClick={v.detail ? () => setExpandedIdx((cur) => (cur === idx ? null : idx)) : undefined}
           />
         ))}
       </div>

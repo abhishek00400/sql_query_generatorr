@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryStore } from '../../store/useQueryStore'
+import { useSchemaStore } from '../../store/useSchemaStore'
 import { MAX_INPUT_LENGTH } from '../../constants/config'
 import { samplePrompts } from '../../constants/samplePrompts'
 import SchemaSelector from './SchemaSelector'
 import Spinner from '../ui/Spinner'
 
 export default function InputSection() {
-  const { userInput, selectedSchema, isLoading, setUserInput } = useQueryStore()
+  const { userInput, isLoading, error, setUserInput } = useQueryStore()
+  const { parsedSchema, selectedSchemaKey } = useSchemaStore()
   const textareaRef = useRef(null)
 
   const [count, setCount] = useState(0)
@@ -90,6 +92,31 @@ export default function InputSection() {
         </div>
       </div>
 
+      {parsedSchema?.tables?.length ? (
+        <div className="mt-4 rounded-lg border border-border/60 bg-bg-elevated/30 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-bold uppercase text-text-muted">
+              {selectedSchemaKey === 'database' ? 'Connected database tables' : 'Loaded schema tables'}
+            </div>
+            <div className="text-xs font-semibold text-text-secondary">{parsedSchema.tables.length} tables</div>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {parsedSchema.tables.slice(0, 6).map((table) => (
+              <div key={table.name} className="rounded-lg border border-border/50 bg-bg-primary/10 px-3 py-2">
+                <div className="text-sm font-bold text-text-primary">{table.name}</div>
+                <div className="mt-1 text-xs text-text-muted">
+                  {(table.columns || []).slice(0, 6).map((column) => column.name).join(', ')}
+                  {(table.columns || []).length > 6 ? '...' : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+          {parsedSchema.tables.length > 6 ? (
+            <div className="mt-2 text-xs text-text-muted">Open Schema to view all tables.</div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <button
           id="generate-sql-btn"
@@ -120,6 +147,12 @@ export default function InputSection() {
           </button>
         )}
       </div>
+
+      {error ? (
+        <div className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">
+          {error}
+        </div>
+      ) : null}
     </section>
   )
 }

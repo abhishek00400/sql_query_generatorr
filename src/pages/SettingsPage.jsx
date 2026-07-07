@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useSettingsStore } from '../store/useSettingsStore'
 import toast from 'react-hot-toast'
 
@@ -10,6 +10,8 @@ export default function SettingsPage() {
     dbConfig,
     apiKey,
     model,
+    aiStatus,
+    aiMessage,
     setDbConfig,
     setApiKey,
     setModel,
@@ -18,7 +20,12 @@ export default function SettingsPage() {
     testConnection,
     saveSettings,
     resetSettings,
+    loadAiStatus,
   } = useSettingsStore()
+
+  useEffect(() => {
+    loadAiStatus()
+  }, [loadAiStatus])
 
   const onSave = () => {
     saveSettings()
@@ -93,14 +100,23 @@ export default function SettingsPage() {
 
         <section className="rounded-xl border border-border bg-bg-surface/30 p-5">
           <h2 className="text-sm font-bold text-text-primary">AI Configuration</h2>
-          <div className="mt-4">
-            <div className="text-xs font-semibold text-text-muted">API Key</div>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-border bg-bg-primary/10 px-3 py-2 font-code text-sm text-text-primary outline-none focus:border-accent"
-            />
+          <div className="mt-4 rounded-lg border border-border bg-bg-elevated/30 px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-text-muted">Backend AI Status</div>
+                <div className="mt-1 text-sm font-bold text-text-primary">
+                  {aiStatus === 'configured' ? 'Configured' : aiStatus === 'missing' ? 'Missing API key' : aiStatus}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={loadAiStatus}
+                className="rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-secondary hover:border-accent hover:text-text-primary"
+              >
+                Refresh
+              </button>
+            </div>
+            {aiMessage ? <div className="mt-2 text-xs text-text-muted">{aiMessage}</div> : null}
           </div>
 
           <div className="mt-4">
@@ -121,7 +137,18 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="mt-2 text-xs text-text-muted">// BACKEND INTEGRATION: API key stored server-side only</div>
+          <div className="mt-4">
+            <div className="text-xs font-semibold text-text-muted">Frontend API key field</div>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Not used by the browser app"
+              className="mt-2 w-full rounded-lg border border-border bg-bg-primary/10 px-3 py-2 font-code text-sm text-text-primary outline-none focus:border-accent"
+            />
+          </div>
+
+          <div className="mt-2 text-xs text-text-muted">Live AI uses GEMINI_API_KEY and GEMINI_MODEL from backend/.env.</div>
         </section>
 
         <section className="rounded-xl border border-border bg-bg-surface/30 p-5">
