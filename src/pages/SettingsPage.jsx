@@ -105,7 +105,7 @@ export default function SettingsPage() {
               <div>
                 <div className="text-xs font-semibold text-text-muted">Backend AI Status</div>
                 <div className="mt-1 text-sm font-bold text-text-primary">
-                  {aiStatus === 'configured' ? 'Configured' : aiStatus === 'missing' ? 'Missing API key' : aiStatus}
+                  {{ configured: 'Configured', missing_key: 'Missing API key', rate_limited: 'Rate limited', error: 'Error', unknown: 'Unknown' }[aiStatus] || aiStatus}
                 </div>
               </div>
               <button

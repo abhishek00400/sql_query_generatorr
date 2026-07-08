@@ -15,9 +15,11 @@ class TestConnectionRequest(BaseModel):
 class TestConnectionResponse(BaseModel):
     success: bool
     message: str
+    status: str = "unknown"
 
 
 class AiStatusResponse(BaseModel):
     configured: bool
     model: str
     message: str
+    status: str = "unknown"

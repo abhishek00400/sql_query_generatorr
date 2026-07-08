@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from app.config import AI_MODEL, GEMINI_API_KEY
 from app.schemas.settings import AiStatusResponse, TestConnectionResponse, TestConnectionRequest
-from app.services import ai_service, db_service
+from app.services import db_service
 
 router = APIRouter(prefix="/db", tags=["settings"])
 
@@ -18,10 +18,16 @@ async def test_connection(request: TestConnectionRequest):
 @router.get("/ai/status", response_model=AiStatusResponse)
 async def ai_status():
     if not GEMINI_API_KEY:
-        return AiStatusResponse(configured=False, model=AI_MODEL, message="GEMINI_API_KEY is missing in backend/.env")
+        return AiStatusResponse(
+            configured=False,
+            model=AI_MODEL,
+            status="missing_key",
+            message="GEMINI_API_KEY is missing in backend/.env",
+        )
 
-    try:
-        ai_service._call_gemini("Return JSON only: {\"ok\": true}")
-        return AiStatusResponse(configured=True, model=AI_MODEL, message="Gemini is connected and responding")
-    except Exception as exc:
-        return AiStatusResponse(configured=False, model=AI_MODEL, message=f"Gemini key/model is configured but the live call failed: {exc}")
+    return AiStatusResponse(
+        configured=True,
+        model=AI_MODEL,
+        status="configured",
+        message="Gemini key and model are configured. Live generation is tested only when you generate SQL, to avoid wasting quota.",
+    )

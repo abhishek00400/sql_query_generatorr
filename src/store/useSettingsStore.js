@@ -55,7 +55,7 @@ export const useSettingsStore = create((set, get) => {
         const result = await getAiStatus()
         set({
           model: result.model || get().model,
-          aiStatus: result.configured ? 'configured' : 'missing',
+          aiStatus: result.status || (result.configured ? 'configured' : 'missing_key'),
           aiMessage: result.message || '',
         })
         return result

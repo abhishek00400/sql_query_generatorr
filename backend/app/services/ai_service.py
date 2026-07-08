@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from decimal import Decimal
@@ -11,12 +12,15 @@ from fastapi import HTTPException
 
 from app.config import AI_MODEL, GEMINI_API_KEY
 import os
+import time
 from app.services.schema_service import parse_raw_schema
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 NUMERIC_HINTS = ["amount", "price", "salary", "total", "score", "marks", "cgpa", "quantity", "count", "age", "id"]
 DATE_HINTS = ["date", "time", "created", "updated", "joined", "join"]
+CACHE_TTL_SECONDS = 600
+_GENERATION_CACHE: dict[str, tuple[float, list[dict]]] = {}
 
 
 def _build_system_prompt() -> str:
@@ -36,6 +40,9 @@ Rules:
 - Do not invent columns.
 - Avoid SELECT * when the user asks for specific fields; SELECT * is acceptable for "show all" requests.
 - For destructive SQL, set isDestructive true.
+- The sql value must be a single JSON string. Escape quotes and do not include raw line breaks inside string values.
+- Use exactly one status value per validation item: success, warning, or danger.
+- Use exactly one type value per impact: SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, or TRUNCATE.
 
 Required JSON shape:
 {
@@ -44,8 +51,8 @@ Required JSON shape:
       "sql": "SELECT ...;",
       "explanation": {"bullets": ["Why this query matches the request", "Why it is optimized"]},
       "tables": [{"name": "table_name", "columns": [{"name": "column_name", "role": "Filter|Return|Join|Sort|Group"}]}],
-      "impact": {"type": "SELECT|INSERT|UPDATE|DELETE", "estimatedRows": 50, "isDestructive": false},
-      "validation": [{"status": "success|warning|danger", "label": "Recommended", "detail": "Best matching option"}]
+      "impact": {"type": "SELECT", "estimatedRows": 50, "isDestructive": false},
+      "validation": [{"status": "success", "label": "Recommended", "detail": "Best matching option"}]
     }
   ]
 }
@@ -71,8 +78,62 @@ def _extract_json_block(text: str) -> str:
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?", "", text, flags=re.IGNORECASE).strip()
         text = re.sub(r"```$", "", text).strip()
-    match = re.search(r"\{(?:.|\n)*\}", text)
-    return match.group(0) if match else text
+
+    object_start = text.find("{")
+    array_start = text.find("[")
+    starts = [idx for idx in [object_start, array_start] if idx >= 0]
+    if not starts:
+        return text
+    start = min(starts)
+
+    opening = text[start]
+    closing = "}" if opening == "{" else "]"
+    depth = 0
+    in_string = False
+    escape = False
+    for idx in range(start, len(text)):
+        char = text[idx]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == "\"":
+                in_string = False
+            continue
+        if char == "\"":
+            in_string = True
+        elif char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                return text[start:idx + 1]
+    return text[start:]
+
+
+def _json_loads_ai(text: str) -> dict:
+    json_text = _extract_json_block(text)
+    payload = json.loads(json_text)
+    if isinstance(payload, list):
+        return {"options": payload}
+    if isinstance(payload, dict):
+        return payload
+    raise ValueError("AI JSON was not an object or list")
+
+
+def _repair_ai_json(raw_text: str, parse_error: Exception) -> dict:
+    repair_prompt = (
+        "Convert the following malformed AI response into valid JSON only. "
+        "Preserve all SQL and fields. Return exactly this shape: "
+        "{\"options\":[{\"sql\":\"...\",\"explanation\":{\"bullets\":[\"...\"]},"
+        "\"tables\":[{\"name\":\"...\",\"columns\":[{\"name\":\"...\",\"role\":\"Return\"}]}],"
+        "\"impact\":{\"type\":\"SELECT\",\"estimatedRows\":50,\"isDestructive\":false},"
+        "\"validation\":[{\"status\":\"success\",\"label\":\"Recommended\",\"detail\":\"...\"}]}]}\n\n"
+        f"Parse error: {parse_error}\n\nMalformed response:\n{raw_text}"
+    )
+    repaired_text = _call_gemini(repair_prompt)
+    return _json_loads_ai(repaired_text)
 
 
 def _parse_schema_summary(schema_sql: str) -> list[dict]:
@@ -265,6 +326,11 @@ def _call_gemini(prompt: str) -> str:
         response = httpx.post(url, params=params, json=body, timeout=30)
         response.raise_for_status()
         payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 500
+        if status_code == 429:
+            raise HTTPException(status_code=429, detail="Gemini quota/rate limit reached. Wait for quota reset, reduce refresh/regenerate calls, or use a Google key with available quota.")
+        raise HTTPException(status_code=status_code, detail=f"AI request failed: {exc}")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"AI request failed: {exc}")
 
@@ -348,6 +414,10 @@ def generate_sql_options(user_input: str, schema_sql: str) -> list[dict]:
     if not schema_sql or not schema_sql.strip():
         raise HTTPException(status_code=400, detail="Schema SQL is required")
 
+    cache_key = hashlib.sha256(f"{AI_MODEL}\n{user_input}\n{schema_sql}".encode("utf-8")).hexdigest()
+    cached = _GENERATION_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < CACHE_TTL_SECONDS:
+        return cached[1]
     try:
         full_prompt = f"{_build_system_prompt()}\n\n{_build_user_prompt(user_input, schema_sql)}"
         raw_text = _call_gemini(full_prompt)
@@ -364,6 +434,7 @@ def generate_sql_options(user_input: str, schema_sql: str) -> list[dict]:
 
         if not options:
             raise ValueError("AI returned options but none contained SQL")
+        _GENERATION_CACHE[cache_key] = (time.time(), options)
         return options
     except HTTPException:
         raise
